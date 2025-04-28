@@ -1,0 +1,50 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
+
+# Load and preprocess data
+df = pd.read_csv('Google_Stock_Price_Test.csv')
+
+# Reducing seq_len further to ensure training data exists
+seq_len = min(10, len(df) - 1)  # Significantly reduced seq_len
+
+# Check if the dataframe has enough data after adjusting seq_len
+if seq_len < 1:
+    raise ValueError("Insufficient data for any sequence length. Please provide a longer dataset.")
+
+data = MinMaxScaler().fit_transform(df[['Close']])
+
+# Creating sequences with adjusted seq_len
+X, y = np.array([data[i - seq_len:i] for i in range(seq_len, len(data))]), data[seq_len:]
+
+# Split train/test, ensuring there is training data
+split = int(0.8 * len(X))
+X_train, X_test, y_train, y_test = X[:split], X[split:], y[:split], y[split:]
+
+# Check for empty training data after split
+if len(X_train) == 0 or len(y_train) == 0:
+    raise ValueError("Training data is empty after split. Please provide a longer dataset or adjust 'seq_len'.")
+
+# Build and train model
+model = tf.keras.Sequential([
+    tf.keras.layers.SimpleRNN(50, input_shape=(seq_len, 1)),  # Updated input_shape
+    tf.keras.layers.Dense(1)
+])
+model.compile(optimizer='adam', loss='mse')
+history = model.fit(X_train, y_train, epochs=20, validation_data=(X_test, y_test), verbose=0)
+
+# Plot training history
+plt.plot(history.history['loss'], label='Train'), plt.plot(history.history['val_loss'], label='Val')
+plt.title('Loss Curve'), plt.xlabel('Epochs'), plt.ylabel('MSE'), plt.legend(), plt.grid(True)
+plt.show()
+
+# Predict and plot
+y_pred = MinMaxScaler().fit(df[['Close']]).inverse_transform(model.predict(X_test))
+y_true = df['Close'].values[-len(y_test):]
+
+plt.plot(y_true, label='Actual'), plt.plot(y_pred, label='Predicted')
+plt.title('Google Stock Price Prediction'), plt.xlabel('Days'), plt.ylabel('Price')
+plt.legend(), plt.grid(True)
+plt.show()
